@@ -1,29 +1,35 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-
-// TODO: Replace with actual database
-const users: any[] = [];
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private prisma: PrismaService,
+  ) {}
 
   async register(registerDto: RegisterDto) {
+    const existing = await this.prisma.user.findUnique({
+      where: { email: registerDto.email },
+    });
+
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     
-    const user = {
-      id: Date.now().toString(),
-      name: registerDto.name,
-      email: registerDto.email,
-      password: hashedPassword,
-      plan: 'free',
-      projects: [],
-    };
-
-    users.push(user);
+    const user = await this.prisma.user.create({
+      data: {
+        name: registerDto.name,
+        email: registerDto.email,
+        password: hashedPassword,
+      },
+    });
 
     const { password, ...result } = user;
     return {
@@ -34,7 +40,9 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const user = users.find((u) => u.email === loginDto.email);
+    const user = await this.prisma.user.findUnique({
+      where: { email: loginDto.email },
+    });
     
     if (!user || !(await bcrypt.compare(loginDto.password, user.password))) {
       throw new UnauthorizedException('Invalid credentials');
@@ -49,10 +57,14 @@ export class AuthService {
   }
 
   async getMe(userId: string) {
-    const user = users.find((u) => u.id === userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    
     if (!user) {
       throw new UnauthorizedException();
     }
+    
     const { password, ...result } = user;
     return result;
   }

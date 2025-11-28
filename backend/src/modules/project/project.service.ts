@@ -1,51 +1,63 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-
-// TODO: Replace with actual database
-const projects: any[] = [];
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ProjectService {
-  create(userId: string, createProjectDto: CreateProjectDto) {
-    const project = {
-      id: Date.now().toString(),
-      ownerId: userId,
-      ...createProjectDto,
-      sitemap: {},
-      generatedPages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  constructor(private prisma: PrismaService) {}
 
-    projects.push(project);
-    return project;
+  async create(userId: string, createProjectDto: CreateProjectDto) {
+    return this.prisma.project.create({
+      data: {
+        name: createProjectDto.name,
+        businessGoals: createProjectDto.businessGoals,
+        brandProfile: createProjectDto.brandProfile ? JSON.stringify(createProjectDto.brandProfile) : null,
+        ownerId: userId,
+      },
+    });
   }
 
-  findAll(userId: string) {
-    return projects.filter((p) => p.ownerId === userId);
+  async findAll(userId: string) {
+    return this.prisma.project.findMany({
+      where: { ownerId: userId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  findOne(id: string, userId: string) {
-    const project = projects.find((p) => p.id === id && p.ownerId === userId);
+  async findOne(id: string, userId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id, ownerId: userId },
+    });
+    
     if (!project) {
       throw new NotFoundException('Project not found');
     }
+    
     return project;
   }
 
-  update(id: string, userId: string, updateProjectDto: UpdateProjectDto) {
-    const project = this.findOne(id, userId);
-    Object.assign(project, updateProjectDto, { updatedAt: new Date() });
-    return project;
+  async update(id: string, userId: string, updateProjectDto: UpdateProjectDto) {
+    await this.findOne(id, userId); // Check ownership
+    
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        ...updateProjectDto,
+        brandProfile: updateProjectDto.brandProfile ? JSON.stringify(updateProjectDto.brandProfile) : undefined,
+        sitemap: updateProjectDto.sitemap ? JSON.stringify(updateProjectDto.sitemap) : undefined,
+        generatedPages: updateProjectDto.generatedPages ? JSON.stringify(updateProjectDto.generatedPages) : undefined,
+      },
+    });
   }
 
-  remove(id: string, userId: string) {
-    const index = projects.findIndex((p) => p.id === id && p.ownerId === userId);
-    if (index === -1) {
-      throw new NotFoundException('Project not found');
-    }
-    projects.splice(index, 1);
+  async remove(id: string, userId: string) {
+    await this.findOne(id, userId); // Check ownership
+    
+    await this.prisma.project.delete({
+      where: { id },
+    });
+    
     return { message: 'Project deleted' };
   }
 }

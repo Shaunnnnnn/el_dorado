@@ -44,3 +44,12 @@ export const aiApi = {
   refine: (projectId: string, feedback: string) =>
     api.post('/ai/refine', { projectId, feedback }),
 };
+
+export const chatApi = {
+  sendMessage: (data: { projectId: string; message: string }) =>
+    api.post('/chat/message', data),
+  getHistory: (projectId: string) =>
+    api.get(`/chat/history/${projectId}`),
+  clearHistory: (projectId: string) =>
+    api.delete(`/chat/history/${projectId}`),
+};
